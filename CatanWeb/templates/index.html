@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Catan vs AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0e1520;--sf:#131d2e;--s2:#1a2540;--bd:#263050;--gold:#f5a623;--blue:#4a90d9;--red:#e05c5c;--txt:#dde2f0;--dim:#5a6480}
+html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--txt);overflow:hidden}
+#app{display:grid;grid-template-columns:240px 1fr 240px;grid-template-rows:50px 1fr;height:100vh}
+header{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:0 18px;background:var(--sf);border-bottom:1px solid var(--bd)}
+header h1{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:3px;color:var(--gold)}
+#sbar{display:flex;align-items:center;gap:10px;font-size:.78rem;color:var(--dim)}
+#tind{padding:3px 12px;border-radius:20px;font-weight:600;font-size:.72rem;letter-spacing:1px;text-transform:uppercase}
+#tind.h{background:#162840;color:var(--blue);border:1px solid var(--blue)}
+#tind.b{background:#301a1a;color:var(--red);border:1px solid var(--red)}
+#tind.w{background:#1a301a;color:#7ed321;border:1px solid #7ed321}
+#ngbtn{padding:5px 16px;border-radius:5px;border:none;cursor:pointer;background:var(--gold);color:#111;font-weight:700;font-family:'DM Sans',sans-serif;font-size:.78rem}
+#ngbtn:hover{opacity:.85}
+.panel{background:var(--sf);display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--bd)}
+.panel.r{border-right:none;border-left:1px solid var(--bd)}
+.ph{padding:10px 13px 8px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:7px}
+.dot{width:9px;height:9px;border-radius:50%}.dot-b{background:var(--blue)}.dot-r{background:var(--red)}
+.ph h2{font-family:'Bebas Neue',sans-serif;font-size:.88rem;letter-spacing:2px}
+.vprow{display:flex;align-items:baseline;gap:5px;padding:10px 13px 6px}
+.vpn{font-family:'Bebas Neue',sans-serif;font-size:2.6rem;line-height:1;color:var(--gold)}
+.vpl{font-size:.62rem;color:var(--dim);letter-spacing:1px;text-transform:uppercase}
+.rg{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:0 10px 8px}
+.rc{background:var(--s2);border-radius:6px;padding:6px 8px;display:flex;align-items:center;gap:6px}
+.ri{font-size:.92rem}.rn{font-size:.55rem;color:var(--dim);text-transform:uppercase;letter-spacing:.7px}.rv{font-size:.95rem;font-weight:700}
+.bgs{display:flex;flex-wrap:wrap;gap:4px;padding:0 10px 8px}
+.bg{padding:2px 6px;border-radius:3px;font-size:.62rem;font-weight:600;background:var(--s2);color:var(--dim);border:1px solid var(--bd)}
+.bg.on{background:#182818;color:#7ed321;border-color:#7ed321}
+.lw{flex:1;display:flex;flex-direction:column;overflow:hidden;border-top:1px solid var(--bd)}
+.lt{padding:7px 13px 3px;font-size:.6rem;letter-spacing:2px;text-transform:uppercase;color:var(--dim)}
+#log{flex:1;overflow-y:auto;padding:0 13px 8px;display:flex;flex-direction:column;gap:2px}
+.le{font-size:.7rem;color:var(--dim);line-height:1.4}
+.le.h{color:#7aacd8}.le.b{color:#d87a7a}.le.s{color:var(--gold)}
+.at{padding:7px 13px 3px;font-size:.6rem;letter-spacing:2px;text-transform:uppercase;color:var(--dim);border-top:1px solid var(--bd)}
+#alist{flex:1;overflow-y:auto;padding:3px 9px 8px;display:flex;flex-direction:column;gap:3px}
+.ab{background:var(--s2);border:1px solid var(--bd);border-radius:5px;padding:6px 10px;font-family:'DM Sans',sans-serif;font-size:.7rem;font-weight:500;color:var(--txt);cursor:pointer;text-align:left;transition:background .1s,border-color .1s}
+.ab:hover{background:#1c2a44;border-color:var(--gold);color:var(--gold)}
+.ab.roll{border-color:var(--gold);color:var(--gold)}.ab.end{border-color:var(--dim)}.ab.sel{border-color:var(--blue);color:var(--blue);background:#162030}
+.wm{padding:12px;font-size:.76rem;color:var(--dim);text-align:center;line-height:1.6}
+#board{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#1a3a5c}
+#svg{display:block}
+.road{stroke-width:7;stroke-linecap:round;fill:none}.road-BLUE{stroke:#4a90d9}.road-RED{stroke:#e05c5c}
+.ehit{stroke:transparent;stroke-width:20;fill:none}.ehit.on{cursor:pointer}
+.eglow{stroke:rgba(255,210,80,.7);stroke-width:7;stroke-linecap:round;fill:none;pointer-events:none;opacity:0}
+.ehit.on:hover+.eglow{opacity:1}
+.nvx{fill:none;cursor:pointer}.nvx.sv{fill:rgba(74,144,217,.22);stroke:#4a90d9;stroke-width:2.5}.nvx.cv{fill:rgba(74,144,217,.12);stroke:#4a90d9;stroke-width:2;stroke-dasharray:4,3}
+.rovx{cursor:pointer}
+#wover{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.8);z-index:30;flex-direction:column;gap:12px}
+#wover.show{display:flex}
+#wtxt{font-family:'Bebas Neue',sans-serif;font-size:2.6rem;letter-spacing:5px;color:var(--gold)}
+#pagain{padding:9px 26px;border-radius:6px;border:none;cursor:pointer;background:var(--gold);color:#111;font-weight:700;font-size:.9rem;font-family:'DM Sans',sans-serif}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--bd);border-radius:2px}
+#tip{position:fixed;pointer-events:none;z-index:200;background:#1a2640;border:1px solid var(--bd);border-radius:4px;padding:3px 8px;font-size:.7rem;color:var(--txt);opacity:0;transition:opacity .1s;white-space:nowrap}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+  <h1>&#x2B21; CATAN vs AI</h1>
+  <div id="sbar"><span id="tlbl">Turn 0</span><span id="tind" class="h">YOUR TURN</span></div>
+  <button id="ngbtn">NEW GAME</button>
+</header>
+<div class="panel">
+  <div class="ph"><div class="dot dot-b"></div><h2>YOU &mdash; BLUE</h2></div>
+  <div class="vprow"><span class="vpn" id="hvp">0</span><span class="vpl">Victory Points</span></div>
+  <div class="rg">
+    <div class="rc"><span class="ri">&#x1FAB5;</span><div><div class="rn">Wood</div><div class="rv" id="hw">0</div></div></div>
+    <div class="rc"><span class="ri">&#x1F9F1;</span><div><div class="rn">Brick</div><div class="rv" id="hbr">0</div></div></div>
+    <div class="rc"><span class="ri">&#x1F411;</span><div><div class="rn">Sheep</div><div class="rv" id="hsh">0</div></div></div>
+    <div class="rc"><span class="ri">&#x1F33E;</span><div><div class="rn">Wheat</div><div class="rv" id="hwh">0</div></div></div>
+    <div class="rc"><span class="ri">&#x26CF;&#xFE0F;</span><div><div class="rn">Ore</div><div class="rv" id="hor">0</div></div></div>
+    <div class="rc"><span class="ri">&#x1F0CF;</span><div><div class="rn">Dev Cards</div><div class="rv" id="hdv">0</div></div></div>
+  </div>
+  <div class="bgs"><span class="bg" id="hroad">&#x1F6E3; Longest Road</span><span class="bg" id="harmy">&#x2694;&#xFE0F; Largest Army</span></div>
+  <div class="lw"><div class="lt">Game Log</div><div id="log"></div></div>
+</div>
+<div id="board">
+  <svg id="svg" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="fshadow" x="-15%" y="-15%" width="130%" height="130%">
+        <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity=".5"/>
+      </filter>
+      <filter id="fbldg" x="-40%" y="-40%" width="180%" height="180%">
+        <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity=".7"/>
+      </filter>
+    </defs>
+    <g id="lbg"></g>
+    <g id="lsand"></g>
+    <g id="ltile"></g>
+    <g id="lport"></g>
+    <g id="lroad"></g>
+    <g id="lehit"></g>
+    <g id="lnode"></g>
+    <g id="lbldg"></g>
+    <g id="ltok"></g>
+    <g id="lrob"></g>
+  </svg>
+  <div id="wover"><div id="wtxt">YOU WIN!</div><button id="pagain">PLAY AGAIN</button></div>
+</div>
+<div class="panel r">
+  <div class="ph"><div class="dot dot-r"></div><h2>BOT &mdash; RED</h2></div>
+  <div class="vprow"><span class="vpn" id="bvp">0</span><span class="vpl">Victory Points</span></div>
+  <div class="rg">
+    <div class="rc"><span class="ri">&#x1FAB5;</span><div><div class="rn">Wood</div><div class="rv" id="bw">0</div></div></div>
+    <div class="rc"><span class="ri">&#x1F9F1;</span><div><div class="rn">Brick</div><div class="rv" id="bbr">0</div></div></div>
+    <div class="rc"><span class="ri">&#x1F411;</span><div><div class="rn">Sheep</div><div class="rv" id="bsh">0</div></div></div>
+    <div class="rc"><span class="ri">&#x1F33E;</span><div><div class="rn">Wheat</div><div class="rv" id="bwh">0</div></div></div>
+    <div class="rc"><span class="ri">&#x26CF;&#xFE0F;</span><div><div class="rn">Ore</div><div class="rv" id="bor">0</div></div></div>
+    <div class="rc"><span class="ri">&#x1F0CF;</span><div><div class="rn">Dev Cards</div><div class="rv" id="bdv">0</div></div></div>
+  </div>
+  <div class="bgs"><span class="bg" id="broad">&#x1F6E3; Longest Road</span><span class="bg" id="barmy">&#x2694;&#xFE0F; Largest Army</span></div>
+  <div class="at">Your Actions</div>
+  <div id="alist"><div class="wm">Click NEW GAME to start!</div></div>
+</div>
+</div>
+<div id="tip"></div>
+
+<script>
+const NS="http://www.w3.org/2000/svg";
+const TC=72; // tile center spacing - matches app.py HEX_SIZE=72
+
+// Resource colours
+const RC={
+  WOOD:  {base:"#3d6b10",rim:"#2a4a08",hi:"#558c18"},
+  BRICK: {base:"#a83010",rim:"#781808",hi:"#cc4020"},
+  SHEEP: {base:"#58a820",rim:"#3e7a10",hi:"#72cc2c"},
+  WHEAT: {base:"#c89808",rim:"#987008",hi:"#e8b810"},
+  ORE:   {base:"#606878",rim:"#404858",hi:"#787c90"},
+  DESERT:{base:"#c4a048",rim:"#9a7830",hi:"#d8bc68"},
+};
+const SAND="#d4b870", SAND_RIM="#b09050";
+
+// Port emoji and label
+const PORT_INFO={
+  WOOD:   {emoji:"&#x1FAB5;", label:"2:1", color:"#3d6b10"},
+  BRICK:  {emoji:"&#x1F9F1;", label:"2:1", color:"#a83010"},
+  SHEEP:  {emoji:"&#x1F411;", label:"2:1", color:"#58a820"},
+  WHEAT:  {emoji:"&#x1F33E;", label:"2:1", color:"#c89808"},
+  ORE:    {emoji:"&#x26CF;&#xFE0F;",  label:"2:1", color:"#606878"},
+  DESERT: {emoji:"&#x2693;",  label:"3:1", color:"#4a6888"},
+  None:   {emoji:"&#x2693;",  label:"3:1", color:"#4a6888"},
+};
+
+// Known generic port node pairs (from analysis — stable for fixed board)
+// These are the 4 generic (3:1) ports' node pairs
+const GENERIC_PAIRS=[[53,52],[49,48],[44,40],[39,38]];
+
+let GS=null, MODE=null;
+
+function mk(tag,a={}){
+  const e=document.createElementNS(NS,tag);
+  for(const[k,v]of Object.entries(a))e.setAttribute(k,v);
+  return e;
+}
+function cl(id){document.getElementById(id).innerHTML=""}
+function el(id){return document.getElementById(id)}
+
+// Flat-top hex points (matches our coord system: x=3/2*q, y=sqrt3/2*q+sqrt3*r)
+function hpts(cx,cy,r){
+  return Array.from({length:6},(_,i)=>{
+    const a=i*Math.PI/3;
+    return `${(cx+r*Math.cos(a)).toFixed(1)},${(cy+r*Math.sin(a)).toFixed(1)}`;
+  }).join(" ");
+}
+
+function tctr(q,r){return[TC*(3/2*q), TC*(Math.sqrt(3)/2*q+Math.sqrt(3)*r)];}
+
+// Outer bounding polygon for the whole island (sandy coast shape)
+// Use the 6 corner tile centers + HEX radius to make the island outline
+function islandOutline(tiles, ox, oy){
+  // Find the 6 outermost hex corners
+  // The board is a hex of hexes — outer ring tiles define the coast
+  // Just draw a big polygon connecting outermost nodes
+  // Simpler: just draw per-tile sand hexes that together form the island shape
+}
+
+function drawBoard(state){
+  const nm={};
+  for(const n of state.nodes)nm[n.id]=n;
+
+  const txs=state.tiles.map(t=>t.cx), tys=state.tiles.map(t=>t.cy);
+  const mnx=Math.min(...txs), mxx=Math.max(...txs);
+  const mny=Math.min(...tys), mxy=Math.max(...tys);
+  // Port indicators stick out about 1.8*TC from center, add margin
+  const M=TC*2.2;
+  const W=mxx-mnx+M*2, H=mxy-mny+M*2;
+  const ox=-mnx+M, oy=-mny+M;
+
+  const svg=el("svg");
+  svg.setAttribute("width",W); svg.setAttribute("height",H);
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+
+  // ── Ocean background ──
+  cl("lbg");
+  el("lbg").appendChild(mk("rect",{x:0,y:0,width:W,height:H,fill:"#2a6aaa"}));
+
+  // ── Sandy island shape: draw one large sand polygon encompassing all tiles ──
+  // We achieve this by drawing each tile with a slightly larger sandy hex first
+  cl("lsand");
+  // First: big unified sand shape — draw all tile sand hexes (they overlap = solid island)
+  for(const t of state.tiles){
+    const cx=t.cx+ox, cy=t.cy+oy;
+    el("lsand").appendChild(mk("polygon",{
+      points:hpts(cx,cy,TC*1.01),
+      fill:SAND, stroke:SAND, "stroke-width":"2"
+    }));
+  }
+  // Thin rim around each sand hex to create slight separation look
+  for(const t of state.tiles){
+    const cx=t.cx+ox, cy=t.cy+oy;
+    el("lsand").appendChild(mk("polygon",{
+      points:hpts(cx,cy,TC*0.99),
+      fill:"none", stroke:SAND_RIM, "stroke-width":"1.5"
+    }));
+  }
+
+  // ── Terrain tiles ──
+  cl("ltile"); cl("ltok"); cl("lrob");
+  for(const t of state.tiles){
+    const cx=t.cx+ox, cy=t.cy+oy;
+    const rc=RC[t.resource]||RC.DESERT;
+
+    // Dark rim inside sand
+    el("ltile").appendChild(mk("polygon",{points:hpts(cx,cy,TC*0.96),fill:rc.rim,stroke:"none"}));
+    // Main tile surface
+    el("ltile").appendChild(mk("polygon",{points:hpts(cx,cy,TC*0.90),fill:rc.base,stroke:"none"}));
+    // Central highlight blob
+    el("ltile").appendChild(mk("polygon",{points:hpts(cx,cy,TC*0.55),fill:rc.hi,stroke:"none",opacity:"0.35"}));
+
+    // Robber
+    if(t.has_robber){
+      const r=mk("text",{x:cx,y:cy+10,"text-anchor":"middle","font-size":"24","pointer-events":"none"});
+      r.textContent="\uD83E\uDDB9"; el("lrob").appendChild(r);
+    }
+
+    // Number token
+    if(t.number){
+      const hot=t.number===6||t.number===8;
+      const TR=16;
+      // Drop shadow
+      el("ltok").appendChild(mk("circle",{cx,cy,r:TR+2,fill:"rgba(0,0,0,.45)"}));
+      // Token body
+      el("ltok").appendChild(mk("circle",{cx,cy,r:TR,fill:"#f0ead8",stroke:hot?"#cc1100":"#8a6830","stroke-width":"1.8"}));
+      // Number
+      const nt=mk("text",{x:cx,y:cy+5.5,"text-anchor":"middle",
+        "font-family":"'DM Sans',sans-serif","font-size":hot?"15":"13","font-weight":"700",
+        fill:hot?"#cc1100":"#2a1400"});
+      nt.textContent=t.number; el("ltok").appendChild(nt);
+      // Pips
+      const nd=[0,0,1,2,3,4,5,4,5,4,3,2,1][t.number]||0;
+      for(let d=0;d<nd;d++){
+        const dx=cx-(nd-1)*3.2+d*3.2;
+        el("ltok").appendChild(mk("circle",{cx:dx,cy:cy+TR-4,r:1.9,fill:hot?"#cc1100":"#4a3010"}));
+      }
+    }
+  }
+
+  // ── Ports ──
+  // Ports sit just outside the land edge, between 2 coastal nodes
+  cl("lport");
+  buildPorts(state, nm, ox, oy);
+
+  // ── Roads ──
+  cl("lroad"); cl("lehit");
+  const rA={};
+  for(const a of state.valid_actions){
+    if(a.type==="BUILD_ROAD"){
+      const m=a.value.match(/\d+/g);
+      if(m&&m.length>=2) rA[[+m[0],+m[1]].sort().join(",")]=a;
+    }
+  }
+  for(const e of state.edges){
+    const x1=e.x1+ox,y1=e.y1+oy,x2=e.x2+ox,y2=e.y2+oy;
+    if(e.color) el("lroad").appendChild(mk("line",{x1,y1,x2,y2,class:`road road-${e.color}`}));
+    const va=rA[[e.n1,e.n2].sort().join(",")];
+    if(va&&state.is_human_turn&&MODE==="road"){
+      const gh=mk("line",{x1,y1,x2,y2,class:"ehit on"});
+      const gl=mk("line",{x1,y1,x2,y2,class:"eglow"});
+      gh.addEventListener("click",()=>submit(va.idx));
+      gh.addEventListener("mouseenter",ev=>tip(ev,"Build Road here"));
+      gh.addEventListener("mouseleave",hideTip);
+      el("lehit").appendChild(gh); el("lehit").appendChild(gl);
+    }
+  }
+
+  // ── Nodes & Buildings ──
+  cl("lnode"); cl("lbldg");
+  const sA={},cA={};
+  for(const a of state.valid_actions){
+    const m=a.value.match(/\d+/); if(!m) continue;
+    if(a.type==="BUILD_SETTLEMENT") sA[+m[0]]=a;
+    if(a.type==="BUILD_CITY") cA[+m[0]]=a;
+  }
+  for(const n of state.nodes){
+    const nx=n.x+ox, ny=n.y+oy;
+    if(n.building_type){
+      const f=n.color==="BLUE"?"#4a90d9":"#e05c5c";
+      const s=n.color==="BLUE"?"#2868b0":"#b03030";
+      n.building_type==="SETTLEMENT"?dSetl(nx,ny,f,s):dCity(nx,ny,f,s);
+    } else {
+      const isS=sA[n.id]&&state.is_human_turn&&MODE==="settlement";
+      const isC=cA[n.id]&&state.is_human_turn&&MODE==="city";
+      if(isS||isC){
+        const act=isS?sA[n.id]:cA[n.id];
+        const vx=mk("circle",{cx:nx,cy:ny,r:11,class:"nvx "+(isS?"sv":"cv")});
+        vx.addEventListener("click",()=>submit(act.idx));
+        vx.addEventListener("mouseenter",ev=>tip(ev,isS?"Place Settlement":"Upgrade to City"));
+        vx.addEventListener("mouseleave",hideTip);
+        el("lnode").appendChild(vx);
+      }
+    }
+  }
+  // Robber overlays
+  if(MODE==="robber"&&state.is_human_turn){
+    for(const a of state.valid_actions.filter(a=>a.type==="MOVE_ROBBER")){
+      const m=a.value.match(/-?\d+/g); if(!m||m.length<2) continue;
+      const t=state.tiles.find(t=>t.q===+m[0]&&t.r===+m[1]); if(!t) continue;
+      const cx=t.cx+ox, cy=t.cy+oy;
+      const ov=mk("polygon",{points:hpts(cx,cy,TC*0.90),
+        fill:"rgba(245,166,35,.28)",stroke:"rgba(245,166,35,.9)","stroke-width":"2.5",class:"rovx"});
+      ov.addEventListener("click",()=>submit(a.idx));
+      ov.addEventListener("mouseenter",ev=>tip(ev,"Place Robber here"));
+      ov.addEventListener("mouseleave",hideTip);
+      el("lnode").appendChild(ov);
+    }
+  }
+}
+
+function buildPorts(state, nm, ox, oy){
+  // Backend now sends 9 ports each with correct 2 land node pairs
+  if(!state.ports||!state.ports.length) return;
+
+  const PORT_SIZE=22;
+  const svgW=parseFloat(el("svg").getAttribute("width"));
+  const svgH=parseFloat(el("svg").getAttribute("height"));
+
+  for(const p of state.ports){
+    if(!p.nodes||p.nodes.length<2) continue;
+    const nd1=nm[p.nodes[0]], nd2=nm[p.nodes[1]];
+    if(!nd1||!nd2) continue;
+
+    const x1=nd1.x+ox, y1=nd1.y+oy;
+    const x2=nd2.x+ox, y2=nd2.y+oy;
+    const mx=(x1+x2)/2, my=(y1+y2)/2;
+
+    // Push badge outward from SVG center
+    const dx=mx-svgW/2, dy=my-svgH/2;
+    const len=Math.sqrt(dx*dx+dy*dy)||1;
+    const ux=dx/len, uy=dy/len;
+    const PUSH=TC*0.72;
+    const px=mx+ux*PUSH, py=my+uy*PUSH;
+
+    const res=p.resource;
+    const isGeneric=!res||res==="None"||res==="DESERT";
+    const info=PORT_INFO[res]||PORT_INFO["None"];
+
+    // Dock lines from each coast node to the badge
+    el("lport").appendChild(mk("line",{x1,y1,x2:px,y2:py,stroke:"#8a7040","stroke-width":"3","stroke-linecap":"round",opacity:"0.85"}));
+    el("lport").appendChild(mk("line",{x1:x2,y1:y2,x2:px,y2:py,stroke:"#8a7040","stroke-width":"3","stroke-linecap":"round",opacity:"0.85"}));
+
+    // Hex badge
+    el("lport").appendChild(mk("polygon",{
+      points:hpts(px,py,PORT_SIZE),
+      fill:info.color, stroke:"#e8dfc0","stroke-width":"2",filter:"url(#fshadow)"
+    }));
+
+    // Emoji via foreignObject
+    const fo=document.createElementNS(NS,"foreignObject");
+    fo.setAttribute("x",px-PORT_SIZE); fo.setAttribute("y",py-PORT_SIZE-1);
+    fo.setAttribute("width",PORT_SIZE*2); fo.setAttribute("height",PORT_SIZE);
+    fo.setAttribute("pointer-events","none");
+    const div=document.createElement("div");
+    div.style.cssText="display:flex;align-items:center;justify-content:center;height:100%;font-size:13px;";
+    div.innerHTML=info.emoji;
+    fo.appendChild(div);
+    el("lport").appendChild(fo);
+
+    // Rate label
+    const lt=mk("text",{x:px,y:py+8,"text-anchor":"middle",
+      "font-family":"'DM Sans',sans-serif","font-size":"8","font-weight":"700",
+      fill:"#fff","pointer-events":"none"});
+    lt.textContent=info.label;
+    el("lport").appendChild(lt);
+  }
+}
+
+function dSetl(x,y,f,s){
+  const w=9,h=10;
+  el("lbldg").appendChild(mk("polygon",{
+    points:`${x},${y-h-2} ${x+w},${y-2} ${x+w},${y+h} ${x-w},${y+h} ${x-w},${y-2}`,
+    fill:f,stroke:s,"stroke-width":"1.5",filter:"url(#fbldg)"
+  }));
+}
+function dCity(x,y,f,s){
+  const w=10,h=8;
+  el("lbldg").appendChild(mk("polygon",{
+    points:`${x-w},${y+h} ${x-w},${y-h+2} ${x-2},${y-h+2} ${x-2},${y-w} ${x+w},${y-w} ${x+w},${y+h}`,
+    fill:f,stroke:s,"stroke-width":"1.5",filter:"url(#fbldg)"
+  }));
+}
+
+function ui(state){
+  GS=state;
+  const S=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+  S("hvp",state.human.vp); S("bvp",state.bot.vp);
+  S("hw",state.human.wood);    S("bw",state.bot.wood);
+  S("hbr",state.human.brick);  S("bbr",state.bot.brick);
+  S("hsh",state.human.sheep);  S("bsh",state.bot.sheep);
+  S("hwh",state.human.wheat);  S("bwh",state.bot.wheat);
+  S("hor",state.human.ore);    S("bor",state.bot.ore);
+  S("hdv",state.human.dev_cards); S("bdv",state.bot.dev_cards);
+  el("hroad").className="bg"+(state.human.has_road?" on":"");
+  el("harmy").className="bg"+(state.human.has_army?" on":"");
+  el("broad").className="bg"+(state.bot.has_road?" on":"");
+  el("barmy").className="bg"+(state.bot.has_army?" on":"");
+  S("tlbl",`Turn ${state.num_turns}`);
+  const ti=el("tind");
+  if(state.winner){
+    ti.className="w";
+    ti.textContent=state.winner===state.human_color?"YOU WIN \uD83C\uDF89":"BOT WINS";
+    el("wover").classList.add("show");
+    el("wtxt").textContent=state.winner===state.human_color?"\uD83C\uDF89 YOU WIN! \uD83C\uDF89":"\uD83D\uDE14 BOT WINS";
+  } else if(state.is_human_turn){ti.className="h";ti.textContent="YOUR TURN";}
+  else{ti.className="b";ti.textContent="BOT THINKING\u2026";}
+  const lg=el("log"); lg.innerHTML="";
+  for(const e of state.log){
+    const d=document.createElement("div");
+    d.className="le"+(e.startsWith("You:")?" h":e.startsWith("Bot:")?" b":" s");
+    d.textContent=e; lg.appendChild(d);
+  }
+  lg.scrollTop=lg.scrollHeight;
+  doActions(state);
+  drawBoard(state);
+}
+
+function doActions(state){
+  const al=el("alist"); al.innerHTML="";
+  if(!state.is_human_turn||state.winner){
+    al.innerHTML=`<div class="wm">${state.winner?"Game over!":"Bot is playing\u2026"}</div>`;
+    MODE=null; return;
+  }
+  const bt={};
+  for(const a of state.valid_actions){if(!bt[a.type])bt[a.type]=[];bt[a.type].push(a);}
+  for(const[t,c]of[["ROLL","roll"],["END_TURN","end"],["DISCARD",""],
+    ["BUY_DEVELOPMENT_CARD",""],["PLAY_KNIGHT_CARD",""],["PLAY_ROAD_BUILDING",""],
+    ["PLAY_YEAR_OF_PLENTY",""],["PLAY_MONOPOLY",""],["MARITIME_TRADE",""]]) {
+    if(!bt[t])continue;
+    for(const a of bt[t]){
+      const b=document.createElement("button");
+      b.className="ab"+(c?" "+c:""); b.textContent=a.label;
+      b.addEventListener("click",()=>submit(a.idx)); al.appendChild(b);
+    }
+  }
+  if(bt["BUILD_SETTLEMENT"])al.appendChild(bb("\uD83C\uDFD8 Place Settlement","settlement"));
+  if(bt["BUILD_CITY"])al.appendChild(bb("\uD83C\uDFD9 Upgrade to City","city"));
+  if(bt["BUILD_ROAD"])al.appendChild(bb("\uD83D\uDEE3 Build Road","road"));
+  if(bt["MOVE_ROBBER"])al.appendChild(bb("\uD83E\uDDB9 Move Robber","robber"));
+}
+function bb(lbl,m){
+  const on=MODE===m;
+  const b=document.createElement("button");
+  b.className="ab"+(on?" sel":"");
+  b.textContent=on?"\uD83D\uDC46 Click the board\u2026":lbl;
+  b.addEventListener("click",()=>{MODE=on?null:m; drawBoard(GS); doActions(GS);});
+  return b;
+}
+
+async function init(){ui(await(await fetch("/api/state")).json());}
+async function newGame(){MODE=null;el("wover").classList.remove("show");ui(await(await fetch("/api/new_game",{method:"POST"})).json());}
+async function submit(idx){
+  MODE=null;
+  const r=await fetch("/api/action",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action_idx:idx})});
+  const s=await r.json(); if(s.error){console.error(s.error);return;} ui(s);
+}
+
+const tipEl=el("tip");
+function tip(ev,t){tipEl.textContent=t;tipEl.style.opacity="1";}
+function hideTip(){tipEl.style.opacity="0";}
+document.addEventListener("mousemove",ev=>{tipEl.style.left=(ev.clientX+12)+"px";tipEl.style.top=(ev.clientY-28)+"px";});
+el("ngbtn").addEventListener("click",newGame);
+el("pagain").addEventListener("click",newGame);
+init();
+</script>
+</body>
+</html>
