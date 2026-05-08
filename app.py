@@ -29,8 +29,8 @@ app = Flask(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(__file__)
-MODEL_PATH = os.path.join(BASE_DIR, "MYMODEL_final5000000")
-VEC_PATH   = os.path.join(BASE_DIR, "vec_normalize.pkl")
+MODEL_PATH = os.path.join(BASE_DIR, "FOUR_PLAYER_RANDOM_MODEL_finalWR18M")
+VEC_PATH   = os.path.join(BASE_DIR, "four_player_random_vec_normalizeWR18M.pkl")
 HEX_SIZE   = 72          # must match TC constant in frontend JS
 FEATURES   = get_feature_ordering(num_players=2)
 
