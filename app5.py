@@ -13,16 +13,10 @@ from catanatron_gym.envs.catanatron_env import (
 )
 from sb3_contrib.ppo_mask import MaskablePPO
 
-# ── 4-player → 2-player adapter ───────────────────────────────────────────────
-# The model (FFF38MR2) was trained on 4-player games (1002 features).
-# The website runs a 2-player game (614 features).
-# adapter.build_4p_obs() pads the missing P2/P3 features with zeros.
-from adapter import build_4p_obs
-
 # ── Monkey-patch roll_dice to capture dice values ─────────────────────────────
 import catanatron.state as _catan_state
 _original_roll_dice = _catan_state.roll_dice
-_last_dice = [None]
+_last_dice = [None]   # list so the closure can mutate it
 
 def _patched_roll_dice():
     result = _original_roll_dice()
@@ -35,18 +29,18 @@ app = Flask(__name__)
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 BASE_DIR   = os.path.dirname(__file__)
-MODEL_PATH = os.path.join(BASE_DIR, "FFF38MR2")       # new 4-player model
-VEC_PATH   = os.path.join(BASE_DIR, "FFF38MR2.pkl")   # matching normalizer
-HEX_SIZE   = 72
+MODEL_PATH = os.path.join(BASE_DIR, "MYMODEL_final5000000")
+VEC_PATH   = os.path.join(BASE_DIR, "vec_normalize.pkl")
+HEX_SIZE   = 72          # must match TC constant in frontend JS
+FEATURES   = get_feature_ordering(num_players=2)
 
 # ── Load model once at startup ────────────────────────────────────────────────
-print("Loading PPO model (4-player trained) …")
+print("Loading PPO model …")
 model = MaskablePPO.load(MODEL_PATH)
 print("Loading VecNormalize stats …")
 with open(VEC_PATH, "rb") as f:
     vec_norm = pickle.load(f)
-print(f"Ready.  Model obs size: {model.observation_space.shape[0]}  "
-      f"(VecNorm: {vec_norm.obs_rms.mean.shape[0]})")
+print("Ready.")
 
 # ── Board geometry helpers ────────────────────────────────────────────────────
 def cube_to_pixel(q, r, size=HEX_SIZE):
@@ -86,7 +80,7 @@ def init_game():
     bot_player   = RandomPlayer(bot_color)
     g = Game([human_player, bot_player])
     node_pos = compute_node_positions(g.state.board)
-    _last_dice[0] = None
+    _last_dice[0] = None   # clear dice on new game
     game_session.update(
         game=g,
         human_color=human_color,
@@ -98,7 +92,6 @@ def init_game():
     return g
 
 def normalize_obs(obs_raw):
-    """Apply saved VecNormalize stats (1002-dimensional)."""
     obs  = np.array(obs_raw, dtype=np.float64)
     mean = vec_norm.obs_rms.mean
     var  = vec_norm.obs_rms.var
@@ -108,20 +101,9 @@ def normalize_obs(obs_raw):
     return obs.astype(np.float32)
 
 def bot_decide(game, bot_color):
-    """
-    Run PPO inference using the 4-player model on a 2-player game.
-
-    Steps:
-    1. create_sample() gives a dict of 614 named features for the 2-player game.
-    2. build_4p_obs() expands this to a 1002-feature vector by zero-filling
-       the P2/P3 slots — the model has never seen those players act, so 0 is
-       the correct value.
-    3. normalize_obs() applies the VecNormalize stats from training.
-    4. model.predict() returns the best legal action index.
-    """
     sample  = create_sample(game, bot_color)
-    obs_raw = build_4p_obs(sample)          # 1002-dim, P2/P3 = 0
-    obs     = normalize_obs(obs_raw)        # normalized, clipped
+    obs_raw = np.array([float(sample[f]) for f in FEATURES], dtype=np.float32)
+    obs     = normalize_obs(obs_raw)
 
     n    = model.action_space.n
     mask = np.zeros(n, dtype=bool)
@@ -161,12 +143,13 @@ RES_EMOJI = {
 }
 
 def trade_label(action):
+    """Format a MARITIME_TRADE action value as e.g. '4 🪵 → 1 🧱'"""
     v = action.value
     if not isinstance(v, (list, tuple)) or len(v) < 2:
         return f"Trade {v}"
-    give_res  = v[0]
-    get_res   = v[-1]
-    give_qty  = sum(1 for x in v[:-1] if x is not None)
+    give_res = v[0]  # first element is always the resource being given
+    get_res  = v[-1]  # last element is always the resource being received
+    give_qty = sum(1 for x in v[:-1] if x is not None)
     give_emoji = RES_EMOJI.get(str(give_res), str(give_res))
     get_emoji  = RES_EMOJI.get(str(get_res),  str(get_res))
     return f"{give_qty} {give_emoji}  \u2192  1 {get_emoji}"
@@ -174,19 +157,19 @@ def trade_label(action):
 def action_label(action):
     at = action.action_type
     v  = action.value
-    if at == ActionType.ROLL:               return "Roll Dice"
-    if at == ActionType.END_TURN:           return "End Turn"
-    if at == ActionType.BUILD_SETTLEMENT:   return f"Build Settlement at node {v}"
-    if at == ActionType.BUILD_CITY:         return f"Build City at node {v}"
-    if at == ActionType.BUILD_ROAD:         return f"Build Road on edge {v}"
+    if at == ActionType.ROLL:              return "Roll Dice"
+    if at == ActionType.END_TURN:          return "End Turn"
+    if at == ActionType.BUILD_SETTLEMENT:  return f"Build Settlement at node {v}"
+    if at == ActionType.BUILD_CITY:        return f"Build City at node {v}"
+    if at == ActionType.BUILD_ROAD:        return f"Build Road on edge {v}"
     if at == ActionType.BUY_DEVELOPMENT_CARD: return "Buy Dev Card"
-    if at == ActionType.MOVE_ROBBER:        return f"Move Robber to {v}"
-    if at == ActionType.DISCARD:            return "Discard"
-    if at == ActionType.PLAY_KNIGHT_CARD:   return "Play Knight"
+    if at == ActionType.MOVE_ROBBER:       return f"Move Robber to {v}"
+    if at == ActionType.DISCARD:           return "Discard"
+    if at == ActionType.PLAY_KNIGHT_CARD:  return "Play Knight"
     if at == ActionType.PLAY_YEAR_OF_PLENTY: return f"Year of Plenty: {v}"
-    if at == ActionType.PLAY_MONOPOLY:      return f"Monopoly: {v}"
+    if at == ActionType.PLAY_MONOPOLY:     return f"Monopoly: {v}"
     if at == ActionType.PLAY_ROAD_BUILDING: return "Road Building"
-    if at == ActionType.MARITIME_TRADE:     return trade_label(action)
+    if at == ActionType.MARITIME_TRADE:    return trade_label(action)
     return str(at)
 
 def serialize_state():
@@ -197,6 +180,8 @@ def serialize_state():
     bot      = game_session["bot_color"]
     node_pos = game_session["node_pos"]
 
+    # FIX: use color_to_index so P0/P1 always matches the right color
+    # regardless of who went first this game
     human_prefix = f"P{g.state.color_to_index[human]}"
     bot_prefix   = f"P{g.state.color_to_index[bot]}"
 
@@ -205,7 +190,8 @@ def serialize_state():
     for (q, r, s), tile in board.map.land_tiles.items():
         cx, cy = cube_to_pixel(q, r)
         tiles.append({
-            "id": tile.id, "q": q, "r": r, "s": s,
+            "id":         tile.id,
+            "q": q, "r": r, "s": s,
             "cx": cx, "cy": cy,
             "resource":   resource_str(tile.resource),
             "number":     tile.number,
@@ -229,7 +215,8 @@ def serialize_state():
         key    = tuple(sorted((n1, n2)))
         rc     = board.roads.get(key) or board.roads.get((n1, n2)) or board.roads.get((n2, n1))
         rcolor = color_str(rc) if rc is not None else None
-        x1, y1 = node_pos[n1]; x2, y2 = node_pos[n2]
+        x1, y1 = node_pos[n1]
+        x2, y2 = node_pos[n2]
         edges.append({"n1": n1, "n2": n2,
                       "x1": x1, "y1": y1, "x2": x2, "y2": y2,
                       "color": rcolor})
@@ -250,16 +237,18 @@ def serialize_state():
                     best_dist = d; best = (n1, n2)
         ports.append({"resource": resource_str(port.resource), "nodes": list(best)})
 
+    # Player states — now using correct prefix per color
     def pstate(prefix):
         return {
-            "vp":             ps.get(f"{prefix}_ACTUAL_VICTORY_POINTS", 0),
-            "wood":           ps.get(f"{prefix}_WOOD_IN_HAND", 0),
-            "brick":          ps.get(f"{prefix}_BRICK_IN_HAND", 0),
-            "sheep":          ps.get(f"{prefix}_SHEEP_IN_HAND", 0),
-            "wheat":          ps.get(f"{prefix}_WHEAT_IN_HAND", 0),
-            "ore":            ps.get(f"{prefix}_ORE_IN_HAND", 0),
-            "has_road":       bool(ps.get(f"{prefix}_HAS_ROAD", False)),
-            "has_army":       bool(ps.get(f"{prefix}_HAS_ARMY", False)),
+            "vp":       ps.get(f"{prefix}_ACTUAL_VICTORY_POINTS", 0),
+            "wood":     ps.get(f"{prefix}_WOOD_IN_HAND", 0),
+            "brick":    ps.get(f"{prefix}_BRICK_IN_HAND", 0),
+            "sheep":    ps.get(f"{prefix}_SHEEP_IN_HAND", 0),
+            "wheat":    ps.get(f"{prefix}_WHEAT_IN_HAND", 0),
+            "ore":      ps.get(f"{prefix}_ORE_IN_HAND", 0),
+            "has_road": bool(ps.get(f"{prefix}_HAS_ROAD", False)),
+            "has_army": bool(ps.get(f"{prefix}_HAS_ARMY", False)),
+            # Individual dev card counts
             "knight_cards":   ps.get(f"{prefix}_KNIGHT_IN_HAND", 0),
             "vp_cards":       ps.get(f"{prefix}_VICTORY_POINT_IN_HAND", 0),
             "year_cards":     ps.get(f"{prefix}_YEAR_OF_PLENTY_IN_HAND", 0),
@@ -274,10 +263,11 @@ def serialize_state():
             ),
         }
 
+    # Dice — use captured value from monkey-patch
     last_roll = _last_dice[0]
-    dice_info = ({"d1": last_roll[0], "d2": last_roll[1], "total": sum(last_roll)}
-                 if last_roll else None)
+    dice_info = {"d1": last_roll[0], "d2": last_roll[1], "total": sum(last_roll)} if last_roll else None
 
+    # Valid actions
     valid_actions = []
     for a in g.state.playable_actions:
         try:
@@ -295,22 +285,22 @@ def serialize_state():
     winner = g.winning_color()
 
     return {
-        "tiles":            tiles,
-        "nodes":            nodes,
-        "edges":            edges,
-        "ports":            ports,
-        "human_color":      color_str(human),
-        "bot_color":        color_str(bot),
-        "human":            pstate(human_prefix),
-        "bot":              pstate(bot_prefix),
-        "current_color":    color_str(g.state.current_color()),
-        "is_human_turn":    g.state.current_color() == human,
-        "valid_actions":    valid_actions,
-        "num_turns":        g.state.num_turns,
-        "winner":           color_str(winner) if winner else None,
-        "log":              game_session["log"][-20:],
+        "tiles":         tiles,
+        "nodes":         nodes,
+        "edges":         edges,
+        "ports":         ports,
+        "human_color":   color_str(human),
+        "bot_color":     color_str(bot),
+        "human":         pstate(human_prefix),
+        "bot":           pstate(bot_prefix),
+        "current_color": color_str(g.state.current_color()),
+        "is_human_turn": g.state.current_color() == human,
+        "valid_actions": valid_actions,
+        "num_turns":     g.state.num_turns,
+        "winner":        color_str(winner) if winner else None,
+        "log":           game_session["log"][-20:],
         "is_initial_phase": g.state.is_initial_build_phase,
-        "dice":             dice_info,
+        "dice":          dice_info,
     }
 
 # ── Routes ────────────────────────────────────────────────────────────────────
